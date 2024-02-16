@@ -66,6 +66,9 @@ class Player(pygame.sprite.Sprite):
                 self.civil_pos[0] = random.randint(0,1200)
                 self.civil_pos[1] = random.randint(0, 800)
                 civil = Civil(civil_image,self.civil_pos)
+                eyes = Eyes(civil.rect.center, civil, 1)
+                civil.eyes = eyes
+                eyes_group.add(eyes)
                 civil_group.add(civil)
 
     def spawn_enemy(self):
@@ -77,6 +80,9 @@ class Player(pygame.sprite.Sprite):
                 self.enemy_pos[0] = random.randint(0,1200)
                 self.enemy_pos[1] = random.randint(0, 800)
                 enemy = Enemy(enemy_image,self.enemy_pos)
+                eyes = Eyes(enemy.rect.center, enemy, 2)
+                enemy.eyes = eyes
+                eyes_group.add(eyes)
                 enemy_group.add(enemy)
 
     def grow(self):
@@ -85,6 +91,7 @@ class Player(pygame.sprite.Sprite):
             self.pos = self.rect.center
             self.rect = self.image.get_rect()
             self.rect.center = self.pos
+            self.amount-=1
         elif pygame.sprite.spritecollide(self,civil_group,0):
             enemy = pygame.sprite.spritecollide(self,civil_group,0)[0]
             if enemy.image.get_height() <= self.image.get_height():
@@ -93,6 +100,7 @@ class Player(pygame.sprite.Sprite):
                 self.pos = self.rect.center
                 self.rect = self.image.get_rect()
                 self.rect.center = self.pos
+                self.amount_civil-=1
         elif pygame.sprite.spritecollide(self,enemy_group,0):
             enemy = pygame.sprite.spritecollide(self,enemy_group,0)[0]
             if enemy.image.get_height() <= self.image.get_height():
@@ -101,6 +109,7 @@ class Player(pygame.sprite.Sprite):
                 self.pos = self.rect.center
                 self.rect = self.image.get_rect()
                 self.rect.center = self.pos
+                self.amount_enemy-=1
     def update(self):
         self.key = pygame.key.get_pressed()
         self.move()
@@ -128,15 +137,60 @@ class Civil(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
         self.rect.y = pos[1]
+        self.timer_move = 0
+        self.speed = 5
+        self.randx = 0
+        self.randy = 0
+        self.food = None
+        self.agr = False
 
     def grow(self):
         if pygame.sprite.spritecollide(self,food_group,1):
+            self.agr = False
             self.image = pygame.transform.rotozoom(self.image,0,1.05)
             self.pos = self.rect.center
             self.rect = self.image.get_rect()
             self.rect.center = self.pos
+            player.amount -= 1
+
+            self.eyes.pos = self.rect.center
+            self.eyes.image = pygame.transform.rotozoom(self.eyes.image, 0, 1.05)
+            self.eyes.rect = self.eyes.image.get_rect()
+            self.eyes.rect.center = self.eyes.pos
+            self.arg = False
+    def random_move(self):
+        self.timer_move += 1
+        self.rect.x += self.randx
+        self.rect.y += self.randy
+        if self.rect.x <= 0:
+            self.randx = self.speed
+        if self.rect.x >= 1200:
+            self.randx = -self.speed
+        if self.rect.y <= 0:
+            self.randy = self.speed
+        if self.rect.y >= 800:
+            self.randy = -self.speed
+        if (self.timer_move/FPS) >1 and self.agr == False:
+            self.randx = random.randint(-self.speed,self.speed)
+            self.randy = random.randint(-self.speed, self.speed)
+            self.timer_move = 0
+        if self.agr:
+            if self.rect.center[0] > self.food.rect.center[0]:
+                self.randx = -1
+                if self.rect.center[1] > self.food.rect.center[1]:
+                    self.randy = -1
+                else:
+                    self.randy = 1
+            else:
+                self.randx = 1
+                if self.rect.center[1] > self.food.rect.center[1]:
+                    self.randy = -1
+                else:
+                    self.randy = 1
+
     def update(self):
         self.grow()
+        self.random_move()
 
 class Enemy(pygame.sprite.Sprite):
     def __init__(self, image, pos):
@@ -145,24 +199,104 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.rect.x = pos[0]
         self.rect.y = pos[1]
+        self.timer_move = 0
+        self.speed = 5
+        self.randx = 0
+        self.randy = 0
+        self.food = None
+        self.agr = False
 
     def grow(self):
-        if pygame.sprite.spritecollide(self,civil_group,1):
-            self.image = pygame.transform.rotozoom(self.image,0,1.05)
-            self.pos = self.rect.center
-            self.rect = self.image.get_rect()
-            self.rect.center = self.pos
+        if pygame.sprite.spritecollide(self,civil_group,False):
+            food = pygame.sprite.spritecollide(self,civil_group, False)[0]
+            if self.image.get_height() / food.image.get_height() > 0.5:
+                food.eyes.kill()
+                food.kill()
+                self.agr = False
+                self.image = pygame.transform.rotozoom(self.image,0,1.05)
+                self.pos = self.rect.center
+                self.rect = self.image.get_rect()
+                self.rect.center = self.pos
+                player.amount_civil -= 1
+
+                self.eyes.pos = self.rect.center
+                self.eyes.image = pygame.transform.rotozoom(self.eyes.image, 0, 1.05)
+                self.eyes.rect = self.eyes.image.get_rect()
+                self.eyes.rect.center = self.eyes.pos
+
+            else:
+                self.agr = False
+
+    def random_move(self):
+        self.timer_move += 1
+        self.rect.x += self.randx
+        self.rect.y += self.randy
+        if self.rect.x <= 0:
+            self.randx = self.speed
+        if self.rect.x >= 1200:
+            self.randx = -self.speed
+        if self.rect.y <= 0:
+            self.randy = self.speed
+        if self.rect.y >= 800:
+            self.randy = -self.speed
+        if (self.timer_move/FPS) >1 and self.agr == False:
+            self.randx = random.randint(-self.speed,self.speed)
+            self.randy = random.randint(-self.speed, self.speed)
+            self.timer_move = 0
+        if self.agr:
+            if self.rect.center[0] > self.food.rect.center[0]:
+                self.randx = -1
+                if self.rect.center[1] > self.food.rect.center[1]:
+                    self.randy = -1
+                else:
+                    self.randy = 1
+            else:
+                self.randx = 1
+                if self.rect.center[1] > self.food.rect.center[1]:
+                    self.randy = -1
+                else:
+                    self.randy = 1
     def update(self):
         self.grow()
+        self.random_move()
 
+class Eyes(pygame.sprite.Sprite):
+    def __init__(self,pos,block,type):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = eyes_image
+        self.rect = self.image.get_rect()
+        self.rect.center = pos
+        self.block = block
+        self.type = type
+        self.pos = pos
+
+    def update(self):
+        self.rect.center = self.block.rect.center
+        if self.type == 1:
+            if (
+                pygame.sprite.spritecollide(self, food_group, False)
+                and self.block.agr == False
+            ):
+                food = pygame.sprite.spritecollide(self,food_group,False)[0]
+                self.block.agr = True
+                self.block.food = food
+        if self.type == 2:
+            if (
+                pygame.sprite.spritecollide(self, civil_group, False)
+                and self.block.agr == False
+            ):
+                food = pygame.sprite.spritecollide(self,civil_group,False)[0]
+                self.block.agr = True
+                self.block.food = food
 
 
 def restart():
-    global player_group, civil_group, enemy_group, food_group,player
+    global player_group, civil_group, enemy_group, food_group,player, eyes_group
     player_group = pygame.sprite.Group()
     civil_group = pygame.sprite.Group()
     enemy_group = pygame.sprite.Group()
     food_group = pygame.sprite.Group()
+    eyes_group = pygame.sprite.Group()
     player = Player(player_image, (500, 500))
     player_group.add(player)
 
@@ -181,6 +315,8 @@ def game_lvl():
     enemy_group.update()
     food_group.draw(sc)
     food_group.update()
+    #eyes_group.draw(sc)
+    eyes_group.update()
     pygame.display.update()
 
 
